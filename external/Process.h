@@ -40,6 +40,10 @@ public:
 		ReadProcessMemory(_process_handle, reinterpret_cast<LPCVOID>(address), &buffer, sizeof(T), nullptr);
 		return buffer;
 	}
+	template<typename T>
+	void writeMemory(uint32_t address, T value) {
+		WriteProcessMemory(_process_handle, reinterpret_cast<LPVOID>(address), &value, sizeof(T), nullptr);
+	}
 	~Process();
 private:
 	HANDLE _process_handle = INVALID_HANDLE_VALUE;

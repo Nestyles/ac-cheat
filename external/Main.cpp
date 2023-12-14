@@ -14,6 +14,8 @@ int main()
 		proc.openProcess(proc_id);
 		uint32_t local_player = proc.readMemory<uint32_t>(ac_addr + 0x18AC00);
 		std::cout << std::dec << proc.readMemory<int32_t>(local_player + 0xEC) << std::endl;
+		proc.writeMemory<int32_t>(local_player + 0xEC, 1000);
+		std::cout << std::dec << proc.readMemory<int32_t>(local_player + 0xEC) << std::endl;
 	} catch (std::exception& exception) {
 		std::cerr << exception.what() << std::endl;
 		return 84;
