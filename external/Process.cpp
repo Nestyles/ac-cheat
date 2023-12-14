@@ -62,7 +62,7 @@ Process::~Process()
     }
 }
 
-uint32_t Process::resolve_mlptr(uint32_t first_addr, const std::vector<unsigned>& offsets) const
+uint32_t Process::resolveMLPtr(uint32_t first_addr, const std::vector<unsigned>& offsets) const
 {
     auto size = offsets.size();
     uintptr_t addr = first_addr;

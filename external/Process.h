@@ -31,7 +31,7 @@ public:
 	static uint32_t getProcId(const wchar_t* process_name);
 	static uint32_t getModuleBaseAdress(uint32_t proc_id, const wchar_t* module_name);
 	void openProcess(uint32_t proc_id);
-	uint32_t resolve_mlptr(uint32_t first_addr, const std::vector<unsigned>& offsets) const;
+	uint32_t resolveMLPtr(uint32_t first_addr, const std::vector<unsigned>& offsets) const;
 
 	template<typename T>
 	T readMemory(uint32_t address) const
