@@ -4,6 +4,16 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
+enum class ModuleOffsets : uintptr_t {
+    LocalPlayer = 0x18AC00
+};
+
+class Player {
+public:
+    char pad[0xEC];
+    int health;
+};
+
 void SetupConsole()
 {
     //Allocate a console and make sure I can write to it
@@ -16,11 +26,17 @@ void SetupConsole()
 
 DWORD WINAPI MainEntry(LPVOID module)
 {
-    std::cout << "coucou" << std::endl;
+    uintptr_t module_base_addr = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL)); // get the moduleBaseAdress of current module (ac_client.exe)
+    std::cout << "ac_client.exe: " << std::hex << module_base_addr << std::dec << std::endl;
+    uintptr_t *local_player_ptr = reinterpret_cast<uintptr_t *>((module_base_addr + static_cast<uintptr_t>(ModuleOffsets::LocalPlayer)));
+
+    Player* local_player = reinterpret_cast<Player*>(*local_player_ptr);
+    std::cout << "health: " << local_player->health << std::endl;
+
     std::cin.ignore();
     //MessageBox(NULL, L"coucou", L"test", MB_OK);
 
-    FreeConsole();
+    FreeConsole(); // the console doesn't close automaticaly (windows 11 problem ?)
     FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(module), 0);
     return 0;
 }
