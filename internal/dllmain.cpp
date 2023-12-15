@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <iostream>
 #include <thread>
+#include <numbers>
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -30,7 +31,7 @@ public:
     float yaw; //0x0034
     float pitch; //0x0038
     char pad_003C[176]; //0x003C
-    int32_t health; //0x00EC
+    int health; //0x00EC
     int32_t armor; //0x00F0
     char pad_00F4[156]; //0x00F4
 }; //Size: 0x0190
@@ -43,6 +44,33 @@ void SetupConsole()
     freopen("CONOUT$", "wb", stderr);
     freopen("CONIN$", "rb", stdin);
     SetConsoleTitle(L"PoC Innovation ;)");
+}
+
+void calc_view_enemy(Player& local, Player& enemy)
+{
+    float abs_x = enemy.head_pos.x - local.head_pos.x;
+    float abs_y = enemy.head_pos.y - local.head_pos.y;
+    float azimuth_xy = atan2f(abs_y, abs_x);
+    if (abs_y < 0) {
+        abs_y *= -1;
+    }
+    if (abs_y < 5) {
+        if (abs_x < 0) {
+            abs_x *= -1;
+        }
+        abs_y = abs_x;
+    }
+    float abs_z = enemy.head_pos.z - local.head_pos.z;
+    float azimuth_z = atan2f(abs_z, abs_y);
+
+    local.yaw = azimuth_xy * (180.0 / std::numbers::pi) + 90;
+    local.pitch = azimuth_z * (180.0 / std::numbers::pi);
+    //return azimuth_xy * (180.0 / std::numbers::pi);
+}
+
+float euclidian_distance(float x, float y)
+{
+    return std::sqrtf(x * x + y * y);
 }
 
 DWORD WINAPI MainEntry(LPVOID module)
@@ -65,10 +93,42 @@ DWORD WINAPI MainEntry(LPVOID module)
     Player* first_enemy = *reinterpret_cast<Player**>(entity_list + 4);
     std::cout << "first_enemy addr: " << first_enemy << std::endl;
     while (!(GetAsyncKeyState(VK_ESCAPE) & 0x01)) {
-        if (local_player != nullptr && first_enemy != nullptr) {
-			std::cout << first_enemy->head_pos << std::endl;
+        float closest_distance = 100000000.0;
+        size_t closest_player_id = 0;
+        if (!local_player)
+            break;
+        for (size_t i = 1; i < *player_count; ++i) {
+			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * i));
+            if (enemy->health <= 0) continue;
+			float abs_x = enemy->head_pos.x - local_player->head_pos.x;
+			float abs_y = enemy->head_pos.y - local_player->head_pos.y;
+            auto temp_closest_distance = euclidian_distance(abs_x, abs_y);
+            if (temp_closest_distance < closest_distance) {
+                closest_distance = temp_closest_distance;
+                closest_player_id = i;
+            }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (local_player != nullptr && *player_count != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
+			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
+			float abs_x = enemy->head_pos.x - local_player->head_pos.x;
+			float abs_y = enemy->head_pos.y - local_player->head_pos.y;
+			float azimuth_xy = atan2f(abs_y, abs_x);
+			if (abs_y < 0) {
+				abs_y *= -1;
+			}
+			if (abs_y < 5) {
+				if (abs_x < 0) {
+					abs_x *= -1;
+				}
+				abs_y = abs_x;
+			}
+			float abs_z = enemy->head_pos.z - local_player->head_pos.z;
+			float azimuth_z = atan2f(abs_z, abs_y);
+
+			local_player->yaw = azimuth_xy * (180.0 / std::numbers::pi) + 90;
+			local_player->pitch = azimuth_z * (180.0 / std::numbers::pi);
+        }
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     std::cout << "Cheat closed\n";
