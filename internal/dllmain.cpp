@@ -80,24 +80,16 @@ void SetupConsole()
 
 void moveViewToEnemy(Player& local, Player& enemy)
 {
+    auto to_deg = [](const float rad) {
+        return rad * 180.f / std::numbers::pi_v<float>;
+	};
     float abs_x = enemy.head_pos.x - local.head_pos.x;
     float abs_y = enemy.head_pos.y - local.head_pos.y;
-    float azimuth_xy = atan2f(abs_y, abs_x);
-    if (abs_y < 0) {
-        abs_y *= -1;
-    }
-    if (abs_y < 5) {
-        if (abs_x < 0) {
-            abs_x *= -1;
-        }
-        abs_y = abs_x;
-    }
     float abs_z = enemy.head_pos.z - local.head_pos.z;
-    float azimuth_z = atan2f(abs_z, abs_y);
 
-    local.yaw = azimuth_xy * (180.0 / std::numbers::pi) + 90;
-    local.pitch = azimuth_z * (180.0 / std::numbers::pi);
-    //return azimuth_xy * (180.0 / std::numbers::pi);
+    //float len = std::sqrt(abs_x * abs_x + abs_y * abs_y + abs_z * abs_z);
+    local.yaw = to_deg(std::atan2(abs_y, abs_x)) + 90;
+    local.pitch = to_deg(std::asin(abs_z / std::hypot(abs_x, abs_y, abs_z)));
 }
 
 float euclidianDistance(float x, float y)
@@ -155,7 +147,7 @@ DWORD WINAPI MainEntry(LPVOID module)
                 closest_player_id = i;
             }
         }
-        if (GetAsyncKeyState(VK_XBUTTON2)) {
+        if (closest_player_id != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
 			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
             moveViewToEnemy(*local_player, *enemy);
         }
