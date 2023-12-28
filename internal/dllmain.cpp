@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "TraceRayCallHk.h"
 #include "Utils.h"
 #include "Player.h"
 #include <cstdio>
@@ -13,19 +14,6 @@ enum class ModuleOffsets : uintptr_t {
     EntityList = 0x18ac04,
     PlayerCount = 0x18ac0c
 };
-
-uintptr_t jumpBack = 0;
-uintptr_t currentCrossHairEntityAddr = 0;
-
-void __declspec(naked) getCrossHairEnt() {
-    __asm {
-        mov currentCrossHairEntityAddr, eax
-        add esp, [10h]
-        mov [esp + 10h], eax
-        jmp jumpBack
-    }
-}
-
 
 void SetupConsole()
 {
@@ -74,6 +62,24 @@ inline void releaseMouse()
     SendInput(1, &input, sizeof(INPUT));
 }
 
+size_t getClosestPlayer(Player &local_player, uintptr_t ent_list, size_t player_count)
+{
+	float closest_distance = 100000000.0;
+	size_t closest_player_id = 0;
+	for (size_t i = 1; i < player_count; ++i) {
+		Player* enemy = *reinterpret_cast<Player**>(ent_list + (4 * i));
+		if (enemy->health <= 0) continue;
+		float abs_x = enemy->head_pos.x - local_player.head_pos.x;
+		float abs_y = enemy->head_pos.y - local_player.head_pos.y;
+		auto temp_closest_distance = euclidianDistance(abs_x, abs_y);
+		if (temp_closest_distance < closest_distance) {
+			closest_distance = temp_closest_distance;
+			closest_player_id = i;
+		}
+	}
+    return closest_player_id;
+}
+
 DWORD WINAPI MainEntry(LPVOID module)
 {
     uintptr_t module_base_addr = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL)); // get the moduleBaseAdress of current module (ac_client.exe)
@@ -86,44 +92,26 @@ DWORD WINAPI MainEntry(LPVOID module)
     std::cout << "entity_list: " << entity_list_ptr << std::endl;
     uintptr_t entity_list = *reinterpret_cast<uintptr_t*>(entity_list_ptr);
 
-    int stolen_len = 7;
-    DWORD traceray_hook = 0x45F573;
-    jumpBack = (DWORD)(traceray_hook + stolen_len);
-    Hook((void*)traceray_hook, getCrossHairEnt, stolen_len);
+    hookTracerayCall();
     while (!(GetAsyncKeyState(VK_ESCAPE) & 0x01)) {
         if (!(local_player != nullptr && *player_count != 0))
             break;
-        float closest_distance = 100000000.0;
-        size_t closest_player_id = 0;
-        for (size_t i = 1; i < *player_count; ++i) {
-			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * i));
-            if (enemy->health <= 0) continue;
-			float abs_x = enemy->head_pos.x - local_player->head_pos.x;
-			float abs_y = enemy->head_pos.y - local_player->head_pos.y;
-            auto temp_closest_distance = euclidianDistance(abs_x, abs_y);
-            if (temp_closest_distance < closest_distance) {
-                closest_distance = temp_closest_distance;
-                closest_player_id = i;
-            }
-        }
+        size_t closest_player_id = getClosestPlayer(*local_player, entity_list, *player_count);
         if (closest_player_id != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
 			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
             moveViewToEnemy(*local_player, *enemy);
         }
-        if (currentCrossHairEntityAddr) {
+        std::cout << "jmp_back " << current_crosshair_ent_addr << std::endl;
+        if (current_crosshair_ent_addr) {
             clickMouse();
         } else {
             releaseMouse();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    Patch((void*)traceray_hook, "\x83\xC4\x10\x89\x44\x24\x10", 7);
+    unHookTracerayCall();
 
     std::cout << "Cheat closed\n";
-
-    //std::cin.ignore();
-    //MessageBox(NULL, L"coucou", L"test", MB_OK);
-
     FreeConsole(); // the console doesn't close automaticaly (windows 11 problem ?)
     FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(module), 0);
     return 0;
