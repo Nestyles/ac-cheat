@@ -1,4 +1,6 @@
 #include "pch.h"
+#include "Utils.h"
+#include "Player.h"
 #include <cstdio>
 #include <iostream>
 #include <thread>
@@ -11,49 +13,6 @@ enum class ModuleOffsets : uintptr_t {
     EntityList = 0x18ac04,
     PlayerCount = 0x18ac0c
 };
-
-class Vector3 {
-public:
-    float x, y, z;
-    friend std::ostream& operator<<(std::ostream& os, const Vector3& vec) {
-        os << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")";
-        return os;
-    }
-};
-
-class Player
-{
-public:
-    char pad_0000[4]; //0x0000
-    Vector3 head_pos; //0x0004
-    char pad_0010[24]; //0x0010
-    Vector3 feet_pos; //0x0028
-    float yaw; //0x0034
-    float pitch; //0x0038
-    char pad_003C[176]; //0x003C
-    int health; //0x00EC
-    int32_t armor; //0x00F0
-    char pad_00F4[156]; //0x00F4
-}; //Size: 0x0190
-
-void Hook(void* hook_addr, void* tFunc, int len)
-{
-    if (len < 5) {
-        throw std::runtime_error("Wrong len for hook");
-    }
-
-    DWORD old_protection;
-    VirtualProtect(hook_addr, len, PAGE_EXECUTE_READWRITE, &old_protection);
-    memset(hook_addr, 0x90, len); // nop
-
-    uintptr_t relative_addr = (reinterpret_cast<uintptr_t>(tFunc) - reinterpret_cast<uintptr_t>(hook_addr)) - 5;
-
-    *(uint8_t *)hook_addr = 0xE9; // jmp opcode
-    *(uint32_t*)((uint32_t)hook_addr + 1) = relative_addr; // jmp addr
-
-    DWORD new_protection;
-    VirtualProtect(hook_addr, len, old_protection, &new_protection);
-}
 
 uintptr_t jumpBack = 0;
 uintptr_t currentCrossHairEntityAddr = 0;
@@ -158,6 +117,7 @@ DWORD WINAPI MainEntry(LPVOID module)
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    Patch((void*)traceray_hook, "\x83\xC4\x10\x89\x44\x24\x10", 7);
 
     std::cout << "Cheat closed\n";
 
