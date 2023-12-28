@@ -128,8 +128,11 @@ BOOL APIENTRY DllMain( HMODULE module,
     case DLL_PROCESS_ATTACH:
         SetupConsole();
         CreateThread(NULL, 0, MainEntry, module, 0, nullptr);
+        break;
     case DLL_THREAD_ATTACH:
+        break;
     case DLL_THREAD_DETACH:
+        break;
     case DLL_PROCESS_DETACH:
         break;
     }
