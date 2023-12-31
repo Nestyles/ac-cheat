@@ -110,6 +110,11 @@ bool __stdcall hkWglSwapBuffer(HDC device_ctx)
     return owgl_swap_buffers(device_ctx);
 }
 
+void UnhookOglSwapBuffers(void *original_addr)
+{
+    Patch(original_addr, "\x8B\xFF\x55\x8B\xEC", 5);
+}
+
 DWORD WINAPI MainEntry(LPVOID module)
 {
     module_base_addr = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL)); // get the moduleBaseAdress of current module (ac_client.exe)
@@ -122,24 +127,13 @@ DWORD WINAPI MainEntry(LPVOID module)
     std::cout << "entity_list: " << entity_list_ptr << std::endl;
     uintptr_t entity_list = *reinterpret_cast<uintptr_t*>(entity_list_ptr);
 
-    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(GetProcAddress(GetModuleHandle(L"opengl32.dll"), "wglSwapBuffers"));
+    twglSwapBuffers original_addr = reinterpret_cast<twglSwapBuffers>(GetProcAddress(GetModuleHandle(L"opengl32.dll"), "wglSwapBuffers"));
     hookTracerayCall();
-    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(TrampHook(owgl_swap_buffers, hkWglSwapBuffer, 5));
+    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(TrampHook(original_addr, hkWglSwapBuffer, 5));
     while (!(GetAsyncKeyState(VK_ESCAPE) & 0x01)) {
-   //     if (!(local_player != nullptr && *player_count != 0))
-   //         break;
-   //     size_t closest_player_id = getClosestPlayer(*local_player, entity_list, *player_count);
-   //     if (closest_player_id != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
-			//Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
-   //         moveViewToEnemy(*local_player, *enemy);
-   //     }
-   //     if (current_crosshair_ent_addr) {
-   //         clickMouse();
-   //     } else {
-   //         releaseMouse();
-   //     }
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
+    UnhookOglSwapBuffers(original_addr);
     unHookTracerayCall();
     std::cout << "Cheat closed\n";
     FreeConsole();
