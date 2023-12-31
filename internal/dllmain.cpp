@@ -9,6 +9,17 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
+typedef bool(__stdcall* twglSwapBuffers)(HDC hdc);
+
+twglSwapBuffers owgl_swap_buffers;
+
+bool __stdcall hkWglSwapBuffer(HDC device_ctx)
+{
+    std::cout << "hooked" << std::endl;
+
+    return owgl_swap_buffers(device_ctx);
+}
+
 enum class ModuleOffsets : uintptr_t {
     LocalPlayer = 0x18AC00,
     EntityList = 0x18ac04,
@@ -92,7 +103,9 @@ DWORD WINAPI MainEntry(LPVOID module)
     std::cout << "entity_list: " << entity_list_ptr << std::endl;
     uintptr_t entity_list = *reinterpret_cast<uintptr_t*>(entity_list_ptr);
 
+    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(GetProcAddress(GetModuleHandle(L"opengl32.dll"), "wglSwapBuffers"));
     hookTracerayCall();
+    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(TrampHook(owgl_swap_buffers, hkWglSwapBuffer, 5));
     while (!(GetAsyncKeyState(VK_ESCAPE) & 0x01)) {
         if (!(local_player != nullptr && *player_count != 0))
             break;
@@ -101,7 +114,6 @@ DWORD WINAPI MainEntry(LPVOID module)
 			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
             moveViewToEnemy(*local_player, *enemy);
         }
-        std::cout << "jmp_back " << current_crosshair_ent_addr << std::endl;
         if (current_crosshair_ent_addr) {
             clickMouse();
         } else {
@@ -110,9 +122,8 @@ DWORD WINAPI MainEntry(LPVOID module)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     unHookTracerayCall();
-
     std::cout << "Cheat closed\n";
-    FreeConsole(); // the console doesn't close automaticaly (windows 11 problem ?)
+    FreeConsole();
     FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(module), 0);
     return 0;
 }
