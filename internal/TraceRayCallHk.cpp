@@ -10,8 +10,6 @@ uintptr_t current_crosshair_ent_addr = 0;
 void __declspec(naked) getCrossHairEnt() {
     __asm {
         mov current_crosshair_ent_addr, eax
-        add esp, [10h]
-        mov [esp + 10h], eax
         jmp jump_back_traceray
     }
 }
@@ -23,7 +21,7 @@ void hookTracerayCall()
     jump_back_traceray = traceray_hook + stolen_len;
     std::cout << jump_back_traceray << std::endl;
 
-    Hook(reinterpret_cast<void *>(traceray_hook), getCrossHairEnt, stolen_len);
+    jump_back_traceray = TrampHook(reinterpret_cast<void *>(traceray_hook), getCrossHairEnt, stolen_len);
 }
 
 void unHookTracerayCall()

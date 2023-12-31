@@ -9,6 +9,10 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
+typedef bool(__stdcall* twglSwapBuffers)(HDC hdc);
+
+twglSwapBuffers owgl_swap_buffers;
+
 enum class ModuleOffsets : uintptr_t {
     LocalPlayer = 0x18AC00,
     EntityList = 0x18ac04,
@@ -80,39 +84,59 @@ size_t getClosestPlayer(Player &local_player, uintptr_t ent_list, size_t player_
     return closest_player_id;
 }
 
+uintptr_t module_base_addr;
+uintptr_t local_player_ptr;
+uintptr_t entity_list_ptr;
+
+bool __stdcall hkWglSwapBuffer(HDC device_ctx)
+{
+    Player* local_player = *reinterpret_cast<Player**>(local_player_ptr);
+    size_t *player_count = reinterpret_cast<size_t*>(module_base_addr + static_cast<uintptr_t>(ModuleOffsets::PlayerCount));
+    uintptr_t entity_list = *reinterpret_cast<uintptr_t*>(entity_list_ptr);
+
+	if (!(local_player != nullptr && *player_count != 0))
+		return owgl_swap_buffers(device_ctx);
+	size_t closest_player_id = getClosestPlayer(*local_player, entity_list, *player_count);
+	if (closest_player_id != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
+		Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
+		moveViewToEnemy(*local_player, *enemy);
+	}
+	if (current_crosshair_ent_addr) {
+		clickMouse();
+	} else {
+		releaseMouse();
+	}
+
+    return owgl_swap_buffers(device_ctx);
+}
+
+void UnhookOglSwapBuffers(void *original_addr)
+{
+    Patch(original_addr, "\x8B\xFF\x55\x8B\xEC", 5);
+}
+
 DWORD WINAPI MainEntry(LPVOID module)
 {
-    uintptr_t module_base_addr = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL)); // get the moduleBaseAdress of current module (ac_client.exe)
+    module_base_addr = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL)); // get the moduleBaseAdress of current module (ac_client.exe)
     std::cout << "ac_client.exe: " << std::hex << module_base_addr << std::dec << std::endl;
-    uintptr_t local_player_ptr = module_base_addr + static_cast<uintptr_t>(ModuleOffsets::LocalPlayer);
+    local_player_ptr = module_base_addr + static_cast<uintptr_t>(ModuleOffsets::LocalPlayer);
     Player* local_player = *reinterpret_cast<Player**>(local_player_ptr);
     size_t *player_count = reinterpret_cast<size_t*>(module_base_addr + static_cast<uintptr_t>(ModuleOffsets::PlayerCount));
     std::cout << "player_count: " << *player_count << std::endl; // doesn't work on empty map
-    uintptr_t entity_list_ptr = module_base_addr + static_cast<uintptr_t>(ModuleOffsets::EntityList);
+    entity_list_ptr = module_base_addr + static_cast<uintptr_t>(ModuleOffsets::EntityList);
     std::cout << "entity_list: " << entity_list_ptr << std::endl;
     uintptr_t entity_list = *reinterpret_cast<uintptr_t*>(entity_list_ptr);
 
+    twglSwapBuffers original_addr = reinterpret_cast<twglSwapBuffers>(GetProcAddress(GetModuleHandle(L"opengl32.dll"), "wglSwapBuffers"));
     hookTracerayCall();
+    owgl_swap_buffers = reinterpret_cast<twglSwapBuffers>(TrampHook(original_addr, hkWglSwapBuffer, 5));
     while (!(GetAsyncKeyState(VK_ESCAPE) & 0x01)) {
-        if (!(local_player != nullptr && *player_count != 0))
-            break;
-        size_t closest_player_id = getClosestPlayer(*local_player, entity_list, *player_count);
-        if (closest_player_id != 0 && GetAsyncKeyState(VK_XBUTTON2)) {
-			Player* enemy = *reinterpret_cast<Player**>(entity_list + (4 * closest_player_id));
-            moveViewToEnemy(*local_player, *enemy);
-        }
-        std::cout << "jmp_back " << current_crosshair_ent_addr << std::endl;
-        if (current_crosshair_ent_addr) {
-            clickMouse();
-        } else {
-            releaseMouse();
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
+    UnhookOglSwapBuffers(original_addr);
     unHookTracerayCall();
-
     std::cout << "Cheat closed\n";
-    FreeConsole(); // the console doesn't close automaticaly (windows 11 problem ?)
+    FreeConsole();
     FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(module), 0);
     return 0;
 }
